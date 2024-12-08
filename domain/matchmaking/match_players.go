@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kratos2377/vortex-matchmaker/domain/entities"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 )
 
 type MatchPlayersUseCaseRedisGateway interface {
@@ -58,6 +59,12 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 	var cursor uint64
 	var tickets []string
 	var err error
+
+	_, err = kafka.DialLeader(context.Background(), "tcp",
+		"localhost:9092", "users-matchmakking", 0)
+	if err != nil {
+		log.Fatal("failed to dial leader")
+	}
 
 	log.Println("Matching Players...")
 	var matchedSessions []PlayerSession
