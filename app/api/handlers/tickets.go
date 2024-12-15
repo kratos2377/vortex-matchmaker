@@ -16,6 +16,7 @@ import (
 type TicketsAPIUseCases interface {
 	CreateTicket(ctx context.Context, input tickets.CreateTicketInput) (tickets.CreateTicketOutput, error)
 	GetTicket(ctx context.Context, input tickets.GetTicketInput) (tickets.GetTicketOutput, error)
+	DeleteTicket(ctx context.Context, input tickets.DeleteTicketInput) (tickets.DeleteTicketOutput, error)
 }
 
 type TicketsAPI struct {
@@ -55,8 +56,6 @@ func (api *TicketsAPI) CreateMatchmakingTicket(writer http.ResponseWriter, reque
 		return
 	}
 
-	println("Body recieved is")
-	println(request.Body)
 	var req CreateMatchmakingTicketRequest
 	err = json.Unmarshal(body, &req)
 	if err != nil {
@@ -78,6 +77,7 @@ func (api *TicketsAPI) CreateMatchmakingTicket(writer http.ResponseWriter, reque
 		PlayerParameters: req.PlayerParameters,
 		MatchParameters:  req.MatchParameters,
 	})
+
 	if err != nil {
 		log.Println(err)
 		writer.WriteHeader(http.StatusInternalServerError)
@@ -139,6 +139,55 @@ func (api *TicketsAPI) GetMatchmakingTicket(writer http.ResponseWriter, request 
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+
+	return
+}
+
+type DeleteUserTicketResponse struct {
+	success bool
+}
+
+func (api *TicketsAPI) DeleteMatchMakingTicket(writer http.ResponseWriter, request *http.Request) {
+	ctx := context.Background()
+	vars := mux.Vars(request)
+
+	playerId, ok := vars["id"]
+	if !ok {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	_, err := api.uc.DeleteTicket(ctx, tickets.DeleteTicketInput{PlayerId: playerId})
+	if err != nil {
+		if errors.Is(err, tickets.TicketNotFoundErr) {
+			writer.WriteHeader(http.StatusNotFound)
+			writer.Write([]byte(err.Error()))
+			return
+		}
+
+		log.Println(err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	response := DeleteUserTicketResponse{
+		success: true,
+	}
+	deleteTicketResponseBytes, err := json.Marshal(response)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	AddHeaders(writer)
+
+	_, err = writer.Write(deleteTicketResponseBytes)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	} else {
+		writer.WriteHeader(http.StatusOK)
 	}
 
 	return

@@ -53,11 +53,19 @@ func main() {
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddress,
-		DB:       cfg.RedisDB,
-		Password: cfg.RedisPassword,
+		Addr:            cfg.RedisAddress,
+		DB:              cfg.RedisDB,
+		Password:        cfg.RedisPassword,
+		MaxRetries:      3,
+		ConnMaxIdleTime: 2 * time.Minute,
 	})
 
+	_, err = redisClient.Ping(context.Background()).Result()
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	conn, err := kafka.DialLeader(context.Background(), "tcp",
 		"localhost:9092", "user-matchmaking", 0)
 	if err != nil {
@@ -69,9 +77,11 @@ func main() {
 	ticketsAPIUseCases := &struct {
 		*tickets.CreateTicketUseCase
 		*tickets.GetTicketUseCase
+		*tickets.DeleteTicketUseCase
 	}{
 		CreateTicketUseCase: tickets.NewCreateTicketUseCase(redisClient, cfg.RedisTicketsSetName),
 		GetTicketUseCase:    tickets.NewGetTicketUseCase(redisClient, cfg.RedisTicketsSetName, cfg.RedisMatchesSetName),
+		DeleteTicketUseCase: tickets.NewDeleteTicketUseCase(redisClient, cfg.RedisTicketsSetName, cfg.RedisMatchesSetName),
 	}
 
 	matchmakingAPIUseCases := &struct {

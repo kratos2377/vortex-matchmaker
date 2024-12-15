@@ -23,7 +23,7 @@ type Config struct {
 	MatchmakerMinPlayersPerSession int32         `mapstructure:"MATCHMAKER_MIN_PLAYERS_PER_SESSION"`
 	MatchmakerMaxPlayersPerSession int32         `mapstructure:"MATCHMAKER_MAX_PLAYERS_PER_SESSION"`
 	MatchmakerTimeout              time.Duration `mapstructure:"MATCHMAKER_TIMEOUT"`
-	WorkerTimeScheduleInSeconds    time.Duration `mapstructure:"WORKER_TIME_SCHEDULE_IN_SECONDS"`
+	WorkerTimeScheduleInSeconds    int64         `mapstructure:"WORKER_TIME_SCHEDULE_IN_SECONDS"`
 }
 
 // LoadConfig reads configuration from file or environment variables.
@@ -61,10 +61,19 @@ func main() {
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddress,
-		DB:       cfg.RedisDB,
-		Password: cfg.RedisPassword,
+		Addr:            cfg.RedisAddress,
+		DB:              cfg.RedisDB,
+		Password:        cfg.RedisPassword,
+		MaxRetries:      3,
+		ConnMaxIdleTime: 3 * time.Minute,
 	})
+
+	_, err = redisClient.Ping(context.Background()).Result()
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	conn, err := kafka.DialLeader(context.Background(), "tcp",
 		"localhost:9092", "user-matchmaking", 0)
@@ -85,7 +94,7 @@ func main() {
 
 	_, err = s.NewJob(
 		gocron.DurationJob(
-			cfg.WorkerTimeScheduleInSeconds*time.Second,
+			10*time.Second,
 		),
 		gocron.NewTask(matchmakingUseCase.MatchPlayers, context.Background()),
 	)

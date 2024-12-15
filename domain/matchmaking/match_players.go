@@ -76,9 +76,11 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 		if err != nil {
 			return MatchPlayersOutput{}, err
 		}
-
+		println("LENGTH OF TICKETS IS")
+		println(len(tickets))
 		for i := 0; i < len(tickets); i = i + 2 {
 			if alreadyMatchedPlayers[tickets[i]] == true {
+				println("AREADY MATCHED")
 				continue
 			}
 
@@ -105,7 +107,10 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 			var eligibleOpponents []string
 			// Append the player
+			println("Adding Eligble opponents")
+			fmt.Printf("%+v", playerTicket)
 			eligibleOpponents = append(eligibleOpponents, playerTicket.PlayerId)
+
 			eligibleOpponentsCountMap := map[string]int{}
 			for _, parameter := range playerTicket.MatchParameters {
 				var result *redis.StringSliceCmd
@@ -165,6 +170,9 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			}
 
 			// Found a match!
+			println("Eligible opponent len is")
+			println(len(eligibleOpponents))
+			println(maxCountForThisPlayer)
 			if int32(len(eligibleOpponents)) == maxCountForThisPlayer {
 				// this could be an id or the address of a game server match
 				gameSessionId := uuid.New().String()
@@ -209,18 +217,20 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 	log.Println("Matched Players: ", matchedSessions)
 
-	converted_json, err := json.Marshal(matchedSessions)
+	if len(matchedSessions) != 0 {
+		converted_json, err := json.Marshal(matchedSessions)
 
-	if err != nil {
-		log.Fatal("Error while converting matchedSessions to json marshal")
-	}
+		if err != nil {
+			log.Fatal("Error while converting matchedSessions to json marshal")
+		}
 
-	m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
-	_, err = m.conn.WriteMessages(kafka.Message{Value: []byte(string(converted_json))})
+		_, err = m.conn.WriteMessages(kafka.Message{Value: []byte(string(converted_json))})
 
-	if err != nil {
-		log.Panicln("Error while publishing messages to key")
+		if err != nil {
+			log.Panicln("Error while publishing messages to key")
+		}
 	}
 
 	return MatchPlayersOutput{

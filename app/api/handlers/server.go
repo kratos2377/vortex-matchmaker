@@ -18,6 +18,8 @@ func NewServer(ucs UseCases) *mux.Router {
 
 	// Add API to delete the ticket from the pool
 
+	router.HandleFunc("/matchmaking/players/{id}/ticket", ticketsAPI.DeleteMatchMakingTicket).Methods("DELETE")
+
 	// Matchmaking API
 	matchmakingAPI := NewMatchmakingAPI(ucs.MatchmakingAPIUseCases)
 

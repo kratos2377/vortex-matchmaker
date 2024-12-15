@@ -51,10 +51,19 @@ func main() {
 	}
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.RedisAddress,
-		DB:       cfg.RedisDB,
-		Password: cfg.RedisPassword,
+		Addr:            cfg.RedisAddress,
+		DB:              cfg.RedisDB,
+		Password:        cfg.RedisPassword,
+		MaxRetries:      3,
+		ConnMaxIdleTime: 3 * time.Minute,
 	})
+
+	_, err = redisClient.Ping(context.Background()).Result()
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	removeExpiredTicketsUseCase := tickets.NewRemoveExpiredTicketsUseCase(redisClient, tickets.RemoveExpiredTicketsUseCaseConfig{
 		TicketsRedisSetName: cfg.RedisTicketsSetName,
@@ -64,7 +73,7 @@ func main() {
 
 	_, err = s.NewJob(
 		gocron.DurationJob(
-			cfg.WorkerTimeScheduleInSeconds*time.Second,
+			1*time.Minute,
 		),
 
 		gocron.NewTask(

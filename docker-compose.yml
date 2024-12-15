@@ -5,7 +5,7 @@ services:
     restart: always
     ports:
       - '6380:6380'
-    command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    command: ["redis-server", "--bind", "matchaker-cache", "--port", "6380", "--requirepass" , "eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81"]
 volumes:
   matchaker-cache:
     driver: local
