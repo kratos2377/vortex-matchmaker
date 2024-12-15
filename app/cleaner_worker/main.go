@@ -78,4 +78,15 @@ func main() {
 	}
 
 	s.Start()
+
+	select {
+	case <-time.After(100 * time.Minute):
+	}
+
+	// when you're done, shut it down
+	err = s.Shutdown()
+	if err != nil {
+		// handle error
+		log.Println("Error while shutting down clean scheduler")
+	}
 }

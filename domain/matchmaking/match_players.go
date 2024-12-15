@@ -32,10 +32,11 @@ type MatchPlayerUseCaseConfig struct {
 type MatchPlayersUseCase struct {
 	redisGateway MatchPlayersUseCaseRedisGateway
 	cfg          MatchPlayerUseCaseConfig
+	conn         *kafka.Conn
 }
 
-func NewMatchPlayersUseCase(redisClient MatchPlayersUseCaseRedisGateway, config MatchPlayerUseCaseConfig) *MatchPlayersUseCase {
-	return &MatchPlayersUseCase{redisGateway: redisClient, cfg: config}
+func NewMatchPlayersUseCase(conn *kafka.Conn, redisClient MatchPlayersUseCaseRedisGateway, config MatchPlayerUseCaseConfig) *MatchPlayersUseCase {
+	return &MatchPlayersUseCase{conn: conn, redisGateway: redisClient, cfg: config}
 }
 
 type MatchPlayerInput struct {
@@ -207,6 +208,21 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 	}
 
 	log.Println("Matched Players: ", matchedSessions)
+
+	converted_json, err := json.Marshal(matchedSessions)
+
+	if err != nil {
+		log.Fatal("Error while converting matchedSessions to json marshal")
+	}
+
+	m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+
+	_, err = m.conn.WriteMessages(kafka.Message{Value: []byte(string(converted_json))})
+
+	if err != nil {
+		log.Panicln("Error while publishing messages to key")
+	}
+
 	return MatchPlayersOutput{
 		matchedSessions,
 	}, nil

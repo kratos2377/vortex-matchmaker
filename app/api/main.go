@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/kratos2377/vortex-matchmaker/app/api/handlers"
 	"github.com/kratos2377/vortex-matchmaker/domain/matchmaking"
 	"github.com/kratos2377/vortex-matchmaker/domain/tickets"
+	"github.com/segmentio/kafka-go"
 	"github.com/spf13/viper"
 
 	"github.com/redis/go-redis/v9"
@@ -55,6 +58,14 @@ func main() {
 		Password: cfg.RedisPassword,
 	})
 
+	conn, err := kafka.DialLeader(context.Background(), "tcp",
+		"localhost:9092", "user-matchmaking", 0)
+	if err != nil {
+		fmt.Println("failed to dial leader")
+	}
+
+	defer conn.Close()
+
 	ticketsAPIUseCases := &struct {
 		*tickets.CreateTicketUseCase
 		*tickets.GetTicketUseCase
@@ -66,7 +77,7 @@ func main() {
 	matchmakingAPIUseCases := &struct {
 		*matchmaking.MatchPlayersUseCase
 	}{
-		MatchPlayersUseCase: matchmaking.NewMatchPlayersUseCase(redisClient, matchmaking.MatchPlayerUseCaseConfig{
+		MatchPlayersUseCase: matchmaking.NewMatchPlayersUseCase(conn, redisClient, matchmaking.MatchPlayerUseCaseConfig{
 			MinCountPerMatch:    cfg.MatchmakerMinPlayersPerSession,
 			MaxCountPerMatch:    cfg.MatchmakerMaxPlayersPerSession,
 			TicketsRedisSetName: cfg.RedisTicketsSetName,

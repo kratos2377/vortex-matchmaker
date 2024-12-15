@@ -55,6 +55,8 @@ func (api *TicketsAPI) CreateMatchmakingTicket(writer http.ResponseWriter, reque
 		return
 	}
 
+	println("Body recieved is")
+	println(request.Body)
 	var req CreateMatchmakingTicketRequest
 	err = json.Unmarshal(body, &req)
 	if err != nil {

@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/go-co-op/gocron/v2"
 	"github.com/kratos2377/vortex-matchmaker/domain/matchmaking"
 	"github.com/redis/go-redis/v9"
+	"github.com/segmentio/kafka-go"
 	"github.com/spf13/viper"
 )
 
@@ -41,6 +43,11 @@ func LoadConfig(path string) (config Config, err error) {
 	return
 }
 
+const (
+	KafkaServer = "localhost:9092"
+	KafkaTopic  = "user-matchmaking"
+)
+
 func main() {
 	cfg, err := LoadConfig("./app/matchmaking")
 	if err != nil {
@@ -59,7 +66,15 @@ func main() {
 		Password: cfg.RedisPassword,
 	})
 
-	matchmakingUseCase := matchmaking.NewMatchPlayersUseCase(redisClient, matchmaking.MatchPlayerUseCaseConfig{
+	conn, err := kafka.DialLeader(context.Background(), "tcp",
+		"localhost:9092", "user-matchmaking", 0)
+	if err != nil {
+		fmt.Println("failed to dial leader")
+	}
+
+	defer conn.Close()
+
+	matchmakingUseCase := matchmaking.NewMatchPlayersUseCase(conn, redisClient, matchmaking.MatchPlayerUseCaseConfig{
 		MinCountPerMatch:    cfg.MatchmakerMinPlayersPerSession,
 		MaxCountPerMatch:    cfg.MatchmakerMaxPlayersPerSession,
 		TicketsRedisSetName: cfg.RedisTicketsSetName,
@@ -82,4 +97,15 @@ func main() {
 	}
 
 	s.Start()
+
+	select {
+	case <-time.After(100 * time.Minute):
+	}
+
+	// when you're done, shut it down
+	err = s.Shutdown()
+	if err != nil {
+		// handle error
+		log.Println("Error while shutting down matchmaking scheduler")
+	}
 }
