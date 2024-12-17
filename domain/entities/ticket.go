@@ -30,6 +30,7 @@ type MatchmakingTicketParameter struct {
 type MatchmakingTicket struct {
 	ID              string
 	PlayerId        string
+	PlayerUsername  string
 	CreatedAt       int64
 	Status          MatchmakingStatus
 	GameSessionId   string

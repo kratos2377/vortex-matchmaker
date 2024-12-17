@@ -30,6 +30,7 @@ func NewTicketsAPI(uc TicketsAPIUseCases) *TicketsAPI {
 type CreateMatchmakingTicketRequest struct {
 	MatchParameters  []entities.MatchmakingTicketParameter       `json:"MatchParameters"`
 	PlayerId         string                                      `json:"PlayerId"`
+	PlayerUsername   string                                      `json:"PlayerUsername"`
 	PlayerParameters []tickets.CreateTicketInputPlayerParameters `json:"PlayerParameters"`
 }
 
@@ -74,6 +75,7 @@ func (api *TicketsAPI) CreateMatchmakingTicket(writer http.ResponseWriter, reque
 
 	output, err := api.uc.CreateTicket(ctx, tickets.CreateTicketInput{
 		PlayerId:         req.PlayerId,
+		PlayerUsername:   req.PlayerUsername,
 		PlayerParameters: req.PlayerParameters,
 		MatchParameters:  req.MatchParameters,
 	})

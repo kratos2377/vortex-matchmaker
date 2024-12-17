@@ -46,10 +46,18 @@ type MatchPlayerInput struct {
 
 type MatchPlayersOutput struct {
 	CreatedSessions []PlayerSession
+	GameType        string
 }
+
+type EligiblePlayerStruct struct {
+	PlayerId       string
+	PlayerUsername string
+}
+
 type PlayerSession struct {
 	SessionID string
-	PlayerIds []string
+	PlayerIds []EligiblePlayerStruct
+	GameType  string
 }
 
 // MatchPlayers tries to match all tickets opened by players.
@@ -70,17 +78,16 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 	log.Println("Matching Players...")
 	var matchedSessions []PlayerSession
 	alreadyMatchedPlayers := map[string]bool{}
+	var gameTypeInt int64
 	for {
 		result := m.redisGateway.HScan(ctx, m.cfg.TicketsRedisSetName, cursor, "", m.cfg.CountPerIteration)
 		tickets, cursor, err = result.Result()
 		if err != nil {
 			return MatchPlayersOutput{}, err
 		}
-		println("LENGTH OF TICKETS IS")
-		println(len(tickets))
+
 		for i := 0; i < len(tickets); i = i + 2 {
 			if alreadyMatchedPlayers[tickets[i]] == true {
-				println("AREADY MATCHED")
 				continue
 			}
 
@@ -90,6 +97,13 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			err = json.Unmarshal(playerTicketBytes, &playerTicket)
 			if err != nil {
 				return MatchPlayersOutput{}, err
+			}
+
+			for _, param := range playerTicket.MatchParameters {
+				if param.Type == "game_type" {
+					gameTypeInt = int64(param.Value)
+					break
+				}
 			}
 
 			// We don't try to match with anyone if the ticket has expired
@@ -105,11 +119,12 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 				maxCountForThisPlayer--
 			}
 
-			var eligibleOpponents []string
+			var eligibleOpponents []EligiblePlayerStruct
 			// Append the player
-			println("Adding Eligble opponents")
-			fmt.Printf("%+v", playerTicket)
-			eligibleOpponents = append(eligibleOpponents, playerTicket.PlayerId)
+			eligibleOpponents = append(eligibleOpponents, EligiblePlayerStruct{
+				PlayerId:       playerTicket.PlayerId,
+				PlayerUsername: playerTicket.PlayerUsername,
+			})
 
 			eligibleOpponentsCountMap := map[string]int{}
 			for _, parameter := range playerTicket.MatchParameters {
@@ -147,18 +162,22 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 					return MatchPlayersOutput{}, err
 				}
 
-				for _, opponent := range foundOpponents {
-					if opponent == playerTicket.PlayerId {
+				for _, opponentStruct := range foundOpponents {
+
+					var opponent EligiblePlayerStruct
+					json.Unmarshal([]byte(opponentStruct), &opponent)
+
+					if opponent.PlayerId == playerTicket.PlayerId {
 						continue
 					}
-					c, ok := eligibleOpponentsCountMap[opponent]
+					c, ok := eligibleOpponentsCountMap[opponent.PlayerId]
 					if !ok {
-						eligibleOpponentsCountMap[opponent] = 1
+						eligibleOpponentsCountMap[opponent.PlayerId] = 1
 					} else {
-						eligibleOpponentsCountMap[opponent] = c + 1
+						eligibleOpponentsCountMap[opponent.PlayerId] = c + 1
 					}
 
-					if eligibleOpponentsCountMap[opponent] == len(playerTicket.MatchParameters) {
+					if eligibleOpponentsCountMap[opponent.PlayerId] == len(playerTicket.MatchParameters) {
 						eligibleOpponents = append(eligibleOpponents, opponent)
 					}
 
@@ -170,9 +189,6 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			}
 
 			// Found a match!
-			println("Eligible opponent len is")
-			println(len(eligibleOpponents))
-			println(maxCountForThisPlayer)
 			if int32(len(eligibleOpponents)) == maxCountForThisPlayer {
 				// this could be an id or the address of a game server match
 				gameSessionId := uuid.New().String()
@@ -183,10 +199,10 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 							return MatchPlayersOutput{}, err
 						}
 					}
-					if err = m.redisGateway.HDel(ctx, m.cfg.TicketsRedisSetName, opponent).Err(); err != nil {
+					if err = m.redisGateway.HDel(ctx, m.cfg.TicketsRedisSetName, opponent.PlayerId).Err(); err != nil {
 						return MatchPlayersOutput{}, err
 					}
-					alreadyMatchedPlayers[opponent] = true
+					alreadyMatchedPlayers[opponent.PlayerId] = true
 
 					// creates a registry in Matches for each opponent
 					playerTicket.Status = entities.MatchmakingStatus_Found
@@ -217,8 +233,18 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 	log.Println("Matched Players: ", matchedSessions)
 
+	var gameTypeString string
+	if gameTypeInt == 0 {
+		gameTypeString = "normal"
+	} else {
+		gameTypeString = "staked"
+	}
+
 	if len(matchedSessions) != 0 {
-		converted_json, err := json.Marshal(matchedSessions)
+		converted_json, err := json.Marshal(MatchPlayersOutput{
+			CreatedSessions: matchedSessions,
+			GameType:        gameTypeString,
+		})
 
 		if err != nil {
 			log.Fatal("Error while converting matchedSessions to json marshal")
@@ -226,7 +252,9 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 		m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 
-		_, err = m.conn.WriteMessages(kafka.Message{Value: []byte(string(converted_json))})
+		_, err = m.conn.WriteMessages(kafka.Message{
+			Key:   []byte("match-found"),
+			Value: []byte(string(converted_json))})
 
 		if err != nil {
 			log.Panicln("Error while publishing messages to key")
@@ -234,6 +262,7 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 	}
 
 	return MatchPlayersOutput{
-		matchedSessions,
+		CreatedSessions: matchedSessions,
+		GameType:        gameTypeString,
 	}, nil
 }
