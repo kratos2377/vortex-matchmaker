@@ -69,12 +69,6 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 	var tickets []string
 	var err error
 
-	_, err = kafka.DialLeader(context.Background(), "tcp",
-		"localhost:9092", "users-matchmakking", 0)
-	if err != nil {
-		log.Fatal("failed to dial leader")
-	}
-
 	log.Println("Matching Players...")
 	var matchedSessions []PlayerSession
 	alreadyMatchedPlayers := map[string]bool{}
@@ -115,9 +109,9 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 			maxCountForThisPlayer := m.cfg.MaxCountPerMatch
 			// when has reached the time limit, we decrease the max amount for a perfect by 1
-			if hasExpired && maxCountForThisPlayer-1 >= m.cfg.MinCountPerMatch {
-				maxCountForThisPlayer--
-			}
+			// if hasExpired && maxCountForThisPlayer-1 >= m.cfg.MinCountPerMatch {
+			// 	maxCountForThisPlayer--
+			// }
 
 			var eligibleOpponents []EligiblePlayerStruct
 			// Append the player
@@ -136,21 +130,21 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 						Max:   fmt.Sprint(parameter.Value),
 						Count: int64(m.cfg.MaxCountPerMatch),
 					})
-				case entities.MatchmakingTicketParameterOperator_GreaterThan:
-					result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
-						Min:   fmt.Sprintf("(%f", parameter.Value),
-						Max:   "+inf",
-						Count: int64(m.cfg.MaxCountPerMatch),
-					})
-				case entities.MatchmakingTicketParameterOperator_SmallerThan:
-					result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
-						Min:   "0",
-						Max:   fmt.Sprintf("(%f", parameter.Value),
-						Count: int64(m.cfg.MaxCountPerMatch),
-					})
-				case entities.MatchmakingTicketParameterOperator_NotEqual:
-					// TODO: support not equal operator
-					continue
+				// case entities.MatchmakingTicketParameterOperator_GreaterThan:
+				// 	result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
+				// 		Min:   fmt.Sprintf("(%f", parameter.Value),
+				// 		Max:   "+inf",
+				// 		Count: int64(m.cfg.MaxCountPerMatch),
+				// 	})
+				// case entities.MatchmakingTicketParameterOperator_SmallerThan:
+				// 	result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
+				// 		Min:   "0",
+				// 		Max:   fmt.Sprintf("(%f", parameter.Value),
+				// 		Count: int64(m.cfg.MaxCountPerMatch),
+				// 	})
+				// case entities.MatchmakingTicketParameterOperator_NotEqual:
+				// 	// TODO: support not equal operator
+				// 	continue
 				default:
 					// TODO: return error
 					continue
@@ -158,11 +152,15 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 				// This will return the player ids of the eligible opponents
 				foundOpponents, err := result.Result()
+				println("FOund oppnents are")
+				fmt.Printf("%+v", foundOpponents)
 				if err != nil {
 					return MatchPlayersOutput{}, err
 				}
 
 				for _, opponentStruct := range foundOpponents {
+
+					println("Inside foundOpponents loop")
 
 					var opponent EligiblePlayerStruct
 					json.Unmarshal([]byte(opponentStruct), &opponent)
@@ -189,13 +187,16 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			}
 
 			// Found a match!
+			println("Length of eligible oppnents is")
+			println(len(eligibleOpponents))
 			if int32(len(eligibleOpponents)) == maxCountForThisPlayer {
 				// this could be an id or the address of a game server match
 				gameSessionId := uuid.New().String()
 				matchedSessions = append(matchedSessions, PlayerSession{PlayerIds: eligibleOpponents, SessionID: gameSessionId})
 				for _, opponent := range eligibleOpponents {
 					for _, parameter := range playerTicket.MatchParameters {
-						if err = m.redisGateway.ZRem(ctx, string(parameter.Type), opponent).Err(); err != nil {
+						if err = m.redisGateway.ZRem(ctx, string(parameter.Type), opponent.PlayerId).Err(); err != nil {
+							log.Println(err)
 							return MatchPlayersOutput{}, err
 						}
 					}
@@ -207,7 +208,7 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 					// creates a registry in Matches for each opponent
 					playerTicket.Status = entities.MatchmakingStatus_Found
 					playerTicket.GameSessionId = gameSessionId
-					m.redisGateway.HSet(ctx, m.cfg.MatchesRedisSetName, opponent, playerTicket)
+					m.redisGateway.HSet(ctx, m.cfg.MatchesRedisSetName, opponent.PlayerId, playerTicket)
 				}
 				// sets the ticket as expired and removes from parameters sets, so it is not tried again
 			} else if hasExpired {
