@@ -30,7 +30,6 @@ type CreateTicketInputPlayerParameters struct {
 }
 type CreateTicketInput struct {
 	PlayerId         string
-	PlayerUsername   string
 	PlayerParameters []CreateTicketInputPlayerParameters
 	MatchParameters  []entities.MatchmakingTicketParameter
 }
@@ -44,7 +43,6 @@ func (c *CreateTicketUseCase) CreateTicket(ctx context.Context, input CreateTick
 	ticket := entities.MatchmakingTicket{
 		ID:              uuid.NewString(),
 		PlayerId:        input.PlayerId,
-		PlayerUsername:  input.PlayerUsername,
 		MatchParameters: input.MatchParameters,
 		Status:          entities.MatchmakingStatus_Pending,
 		CreatedAt:       time.Now().Unix(),

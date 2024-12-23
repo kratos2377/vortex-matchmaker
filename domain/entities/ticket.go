@@ -24,13 +24,12 @@ const (
 type MatchmakingTicketParameter struct {
 	Type     MatchmakingTicketParameterType
 	Operator MatchmakingTicketParameterOperator
-	Value    string
+	Value    float64
 }
 
 type MatchmakingTicket struct {
 	ID              string
 	PlayerId        string
-	PlayerUsername  string
 	CreatedAt       int64
 	Status          MatchmakingStatus
 	GameSessionId   string
