@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,7 +96,8 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 			for _, param := range playerTicket.MatchParameters {
 				if param.Type == "game_type" {
-					gameTypeInt = int64(param.Value)
+					gameTypeIntRes, _ := strconv.Atoi(param.Value)
+					gameTypeInt = int64(gameTypeIntRes)
 					break
 				}
 			}
@@ -126,8 +128,8 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 				switch parameter.Operator {
 				case entities.MatchmakingTicketParameterOperator_Equal:
 					result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
-						Min:   fmt.Sprint(parameter.Value),
-						Max:   fmt.Sprint(parameter.Value),
+						Min:   parameter.Value,
+						Max:   parameter.Value,
 						Count: int64(m.cfg.MaxCountPerMatch),
 					})
 				// case entities.MatchmakingTicketParameterOperator_GreaterThan:

@@ -24,7 +24,7 @@ const (
 type MatchmakingTicketParameter struct {
 	Type     MatchmakingTicketParameterType
 	Operator MatchmakingTicketParameterOperator
-	Value    float64
+	Value    string
 }
 
 type MatchmakingTicket struct {
