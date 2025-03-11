@@ -252,6 +252,7 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 
 		if err != nil {
 			log.Panicln("Error while publishing messages to key")
+			fmt.Sprintf("%v", err)
 		}
 	}
 
