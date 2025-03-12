@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -66,14 +67,24 @@ func main() {
 		log.Println(err)
 		return
 	}
-	conn, err := kafka.DialLeader(context.Background(), "tcp",
+
+	dialer := &kafka.Dialer{
+		Timeout:   20 * time.Second,
+		DualStack: true,
+		TLS: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
+	conn, err := dialer.DialLeader(context.Background(), "tcp",
 		"localhost:9092", "user-matchmaking", 0)
+
 	if err != nil {
 		fmt.Println("failed to dial leader")
 	}
 
-	defer conn.Close()
-
+	//defer conn.Close()
+	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 	ticketsAPIUseCases := &struct {
 		*tickets.CreateTicketUseCase
 		*tickets.GetTicketUseCase

@@ -244,15 +244,13 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			log.Fatal("Error while converting matchedSessions to json marshal")
 		}
 
-		m.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-
 		_, err = m.conn.WriteMessages(kafka.Message{
 			Key:   []byte("match-found"),
 			Value: []byte(string(converted_json))})
 
 		if err != nil {
-			log.Panicln("Error while publishing messages to key")
-			fmt.Sprintf("%v", err)
+			log.Println(err)
+			//log.Panicln("Error while publishing messages to key")
 		}
 	}
 
