@@ -113,15 +113,18 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 			eligibleOpponents = append(eligibleOpponents, playerTicket.PlayerId)
 
 			eligibleOpponentsCountMap := map[string]int{}
+			var result *redis.StringSliceCmd
 			for _, parameter := range playerTicket.MatchParameters {
-				var result *redis.StringSliceCmd
+
 				switch parameter.Operator {
 				case entities.MatchmakingTicketParameterOperator_Equal:
 					result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
-						Min:   fmt.Sprint(parameter.Value),
-						Max:   fmt.Sprint(parameter.Value),
+						Min:   fmt.Sprint(getMinLimit(fmt.Sprint(parameter.Value))),
+						Max:   fmt.Sprint(getMaxLimit(fmt.Sprint(parameter.Value))),
 						Count: int64(m.cfg.MaxCountPerMatch),
 					})
+					fmt.Println("Curren res is after applying equal operator")
+					fmt.Println(result)
 				case entities.MatchmakingTicketParameterOperator_GreaterThan:
 					result = m.redisGateway.ZRangeByScore(ctx, string(parameter.Type), &redis.ZRangeBy{
 						Min:   fmt.Sprintf("(%f", parameter.Value),
@@ -143,40 +146,41 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 				}
 
 				// This will return the player ids of the eligible opponents
-				foundOpponents, err := result.Result()
-				if err != nil {
-					return MatchPlayersOutput{}, err
+
+			}
+
+			foundOpponents, err := result.Result()
+			if err != nil {
+				return MatchPlayersOutput{}, err
+			}
+
+			for _, opponent := range foundOpponents {
+
+				if opponent == playerTicket.PlayerId {
+					continue
 				}
 
-				for _, opponent := range foundOpponents {
-
-					if opponent == playerTicket.PlayerId {
-						continue
+				for _, param := range playerTicket.MatchParameters {
+					c, ok := eligibleOpponentsCountMap[opponent]
+					if !ok {
+						eligibleOpponentsCountMap[opponent] = 1
+					} else {
+						eligibleOpponentsCountMap[opponent] = c + 1
 					}
 
-					for _, param := range playerTicket.MatchParameters {
-						c, ok := eligibleOpponentsCountMap[opponent]
-						if !ok {
-							eligibleOpponentsCountMap[opponent] = 1
-						} else {
-							eligibleOpponentsCountMap[opponent] = c + 1
-						}
+					if eligibleOpponentsCountMap[opponent] == len(playerTicket.MatchParameters) {
+						fmt.Printf("%v", param)
 
-						if eligibleOpponentsCountMap[opponent] == len(playerTicket.MatchParameters) {
-							fmt.Printf("%v", param)
-
-							eligibleOpponents = append(eligibleOpponents, opponent)
-						}
-
-						if int32(len(eligibleOpponents)) == m.cfg.MaxCountPerMatch {
-							break
-						}
+						eligibleOpponents = append(eligibleOpponents, opponent)
 					}
+
 					if int32(len(eligibleOpponents)) == m.cfg.MaxCountPerMatch {
 						break
 					}
 				}
-
+				if int32(len(eligibleOpponents)) == m.cfg.MaxCountPerMatch {
+					break
+				}
 			}
 
 			// Found a match!
@@ -258,4 +262,25 @@ func (m *MatchPlayersUseCase) MatchPlayers(ctx context.Context) (MatchPlayersOut
 		CreatedSessions: matchedSessions,
 		GameType:        gameTypeString,
 	}, nil
+}
+
+func getMinLimit(paramValue string) float64 {
+	println(paramValue)
+	if paramValue == "0" {
+		return 0
+	} else if paramValue == "1" {
+		return 201
+	}
+
+	return -1
+}
+
+func getMaxLimit(paramValue string) float64 {
+	println(paramValue)
+	if paramValue == "0" {
+		return 200
+	} else if paramValue == "1" {
+		return 402
+	}
+	return -1
 }

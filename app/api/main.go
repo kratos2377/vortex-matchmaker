@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -68,19 +67,28 @@ func main() {
 		return
 	}
 
-	dialer := &kafka.Dialer{
-		Timeout:   20 * time.Second,
-		DualStack: true,
-		TLS: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
+	// mechanism := plain.Mechanism{
+	// 	Username: "my-api-key",
+	// 	Password: "my-api-secret",
+	// }
 
-	conn, err := dialer.DialLeader(context.Background(), "tcp",
+	// dialer := &kafka.Dialer{
+	// 	Timeout:   20 * time.Second,
+	// 	DualStack: true,
+	// 	TLS: &tls.Config{
+	// 		InsecureSkipVerify: true,
+	// 		MinVersion:         tls.VersionTLS12,
+	// 	},
+	// 	SASLMechanism: mechanism,
+	// }
+
+	conn, err := kafka.DialLeader(context.Background(), "tcp",
 		"localhost:9092", "user-matchmaking", 0)
 
 	if err != nil {
-		fmt.Println("failed to dial leader")
+		fmt.Println(err)
+		log.Panicln("failed to dial leader")
+
 	}
 
 	//defer conn.Close()

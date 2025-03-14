@@ -3,6 +3,7 @@ package tickets
 import (
 	"context"
 	"log"
+	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,6 +67,15 @@ func (c *CreateTicketUseCase) CreateTicket(ctx context.Context, input CreateTick
 			continue
 		}
 
+		if parameter.Type == "game_type" {
+			if score == 0 {
+				score += float64(rand.Intn(200))
+			} else {
+				score += 200
+				score += float64(rand.Intn(200))
+			}
+
+		}
 		cmd := c.redisGateway.ZAdd(ctx, string(parameter.Type), redis.Z{
 			Score:  score,
 			Member: input.PlayerId,
